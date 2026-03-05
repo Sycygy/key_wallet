@@ -26,3 +26,6 @@ endfunction()
 
 # ── Smoke test ────────────────────────────────────────────────────────────────
 add_kw_test(test_scaffold test_scaffold.cpp)
+
+# ── Phase 1.2 — SecureBuffer ──────────────────────────────────────────────────
+add_kw_test(test_secure_buffer test_secure_buffer.cpp)
