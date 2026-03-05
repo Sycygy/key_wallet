@@ -1,0 +1,14 @@
+# Build
+/build/
+
+# Editor
+.vscode/
+
+# Compiled objects
+*.o
+*.obj
+*.exe
+*.out
+
+# Misc
+*.log
