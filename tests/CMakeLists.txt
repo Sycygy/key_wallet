@@ -12,8 +12,8 @@ FetchContent_MakeAvailable(googletest)
 include(GoogleTest)
 
 # ── Helper: define a test target ─────────────────────────────────────────────
-function(add_kw_test name source)
-    add_executable(${name} ${source})
+function(add_kw_test name)
+    add_executable(${name} ${ARGN})
     target_include_directories(${name} PRIVATE
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}/include
@@ -29,3 +29,6 @@ add_kw_test(test_scaffold test_scaffold.cpp)
 
 # ── Phase 1.2 — SecureBuffer ──────────────────────────────────────────────────
 add_kw_test(test_secure_buffer test_secure_buffer.cpp)
+
+# ── Phase 1.3 — random ────────────────────────────────────────────────────────
+add_kw_test(test_random test_random.cpp ../src/crypto/random/random.cpp)
