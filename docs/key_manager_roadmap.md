@@ -54,9 +54,11 @@ Phase 5 → GUI (stretch goal)
 ### 1.5 `crypto/aead`
 - [ ] Implement AES-256-GCM encrypt: `encrypt(key, plaintext, aad) → {iv, ciphertext, tag}`
 - [ ] Implement AES-256-GCM decrypt: `decrypt(key, iv, ciphertext, tag, aad) → plaintext`
-- [ ] Generate fresh random 12-byte IV per encryption call
+- [ ] Hybrid IV construction per NIST SP 800-38D §8.2.2: `IV = counter(4B, LE) || random(8B)`
+  - Counter-based overload for main vault encryption (counter from encrypted payload)
+  - Fully random IV overload for verification token encryption
 - [ ] Return explicit error on tag verification failure (do not silently return garbage)
-- [ ] Unit test: encrypt → decrypt round-trip; tampered ciphertext → error; tampered AAD → error
+- [ ] Unit test: encrypt → decrypt round-trip; tampered ciphertext → error; tampered AAD → error; hybrid IV uses counter prefix correctly
 
 **Phase 1 exit criteria:** `ctest` passes all crypto unit tests. No hardcoded keys or test artifacts committed.
 
@@ -76,9 +78,9 @@ Phase 5 → GUI (stretch goal)
 
 ### 2.2 `storage/vault`
 - [ ] Implement vault binary format (see design doc Section 6)
-- [ ] `create_vault(path, master_password) → Vault` — generates salt, derives key, generates verification token, sets `master_password_changed_at = now`, `expiry_days = 30`, writes empty vault
-- [ ] `load_vault(path, master_password) → Vault` — reads file, verifies AAD, verifies token, decrypts, deserializes
-- [ ] `save_vault(vault, path)` — serializes, encrypts with fresh IV, writes atomically via `rename()`
+- [ ] `create_vault(path, master_password) → Vault` — generates salt, derives key, generates verification token, sets `save_counter = 0`, `master_password_changed_at = now`, `expiry_days = 30`, writes empty vault
+- [ ] `load_vault(path, master_password) → Vault` — reads file, verifies AAD, verifies token, decrypts, deserializes (reads `save_counter` from payload)
+- [ ] `save_vault(vault, path)` — increments `save_counter`, builds hybrid IV (counter ‖ random), encrypts, writes atomically via `rename()`
 - [ ] AAD covers: MAGIC + VERSION + CREATED_AT + SALT + ARGON2_PARAMS
 - [ ] `verify_master_password(input) → bool` — re-derives key, attempts token decryption, returns result
 - [ ] `check_expiry() → ExpiryStatus` — returns EXPIRED, WARNING (≤7 days), or OK based on `changed_at + expiry_days`

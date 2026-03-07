@@ -120,13 +120,30 @@ The salt is stored in the vault header in plaintext. It is not secret — its pu
 | Parameter | Value |
 |-----------|-------|
 | Key size | 256 bits (32 bytes) |
-| IV (nonce) | 96 bits (12 bytes), random per encryption |
+| IV (nonce) | 96 bits (12 bytes), hybrid construction (see below) |
 | Authentication tag | 128 bits (16 bytes) |
 | AAD | Vault format version + creation timestamp |
 
 **Why GCM over CBC-HMAC?** GCM provides both confidentiality and integrity in a single pass with a clean, standardized API. CBC with a separate HMAC is error-prone to implement correctly (MAC-then-Encrypt vs Encrypt-then-MAC ordering). GCM natively produces an authentication tag, and OpenSSL's EVP interface handles this correctly.
 
-**Nonce handling:** A fresh 12-byte cryptographically random nonce is generated for every encryption operation (vault save). The nonce is stored alongside the ciphertext in the vault file. Given that a vault is only re-encrypted on save (not per-entry), nonce collision probability is negligible.
+**Nonce handling — hybrid construction (NIST SP 800-38D §8.2.2):**
+
+The main vault ciphertext uses a **hybrid IV** composed of a deterministic counter and a random field:
+
+```
+IV (12 bytes) = [ counter (4 bytes, LE) ] || [ random (8 bytes) ]
+```
+
+| Component | Size | Source |
+|-----------|------|--------|
+| Counter (fixed field) | 4 bytes | Monotonic `save_counter` from encrypted payload, incremented on every save |
+| Random (invocation field) | 8 bytes | `RAND_bytes()` per encryption call |
+
+The counter guarantees **uniqueness**: even if `RAND_bytes()` were to repeat, the counter value will differ. The random portion adds **unpredictability**. Together they satisfy NIST's deterministic construction requirements.
+
+The counter is stored inside the encrypted payload (`SAVE_COUNTER`, see §6), making it tamper-proof. On `create_vault`, the counter starts at 0. On every `save_vault`, the counter is incremented before encryption.
+
+**Verification token IV:** The verification token uses a fully random 12-byte IV (no counter), since it is only encrypted on vault creation and `change-master` — at most a handful of times over a vault's lifetime.
 
 ### 3.3 Password Generation
 
@@ -415,6 +432,7 @@ The vault is a single binary file with the following layout. All multi-byte inte
 **Encrypted payload format (plaintext inside the ciphertext):**
 
 ```
+[ SAVE_COUNTER: uint32 ]                 ← Monotonic counter for hybrid IV construction (starts at 0)
 [ MASTER_PASSWORD_CHANGED_AT: uint64 ]   ← Unix timestamp of last change-master
 [ MASTER_PASSWORD_EXPIRY_DAYS: uint32 ]  ← 0 = disabled, default = 30
 [ ENTRY_COUNT: uint32 ]
@@ -441,11 +459,12 @@ When the user changes their master password:
 
 1. Derive a new key from the new master password with a **fresh salt**.
 2. Generate a new verification token encrypted under the new key with a fresh IV.
-3. Update `master_password_changed_at` to the current Unix timestamp inside the payload.
-4. Re-encrypt the entire vault payload under the new key and a new IV.
-5. Write the new vault file atomically.
-6. Zero the old key from memory.
-7. Transition session state from EXPIRED (or BROWSING) to BROWSING.
+3. Reset `save_counter` to 0 inside the payload (new key = new counter domain).
+4. Update `master_password_changed_at` to the current Unix timestamp inside the payload.
+5. Re-encrypt the entire vault payload under the new key with a hybrid IV (counter=0 || random).
+6. Write the new vault file atomically.
+7. Zero the old key from memory.
+8. Transition session state from EXPIRED (or BROWSING) to BROWSING.
 
 This means key rotation is O(vault size), not O(number of entries). The old vault file is overwritten; there is no key history stored. Resetting `master_password_changed_at` restarts the expiry countdown from the moment of rotation.
 
@@ -480,7 +499,7 @@ This means key rotation is O(vault size), not O(number of entries). The old vaul
 | Session model | Two-step (LOCKED → BROWSING → RETRIEVING) | Single unlock, always-locked | Protects against opportunistic access to an unlocked session without leaking metadata on disk. Industry pattern used by hardware security keys. |
 | Re-authentication method | Verification token (Option B) | Re-derive and compare keys directly | Token approach avoids storing the key anywhere. Re-derivation is implicitly performed via decryption. Standard industry pattern (used by VeraCrypt, KeePass). |
 | BROWSING memory layout | Zero password fields, keep metadata | Keep all fields, re-zero on lock | Minimizes window where passwords are in memory. An attacker with memory access during BROWSING cannot read passwords. |
-| Nonce strategy | Random 96-bit per save | Counter-based | Vault is saved infrequently; collision probability with 96-bit random nonce over a vault's lifetime is negligible (~2^-80 after 2^16 saves). Simpler than managing a persistent counter. |
+| Nonce strategy | Hybrid IV: counter(4B) ‖ random(8B) per NIST SP 800-38D §8.2.2 | Fully random 96-bit, counter-only | Counter guarantees uniqueness; random field adds unpredictability. Counter stored inside encrypted payload (tamper-proof, resets on key rotation). Verification token uses fully random IV since it is encrypted at most a few times per key lifetime. |
 | AAD scope | Header fields (magic through KDF params) | None, or full header | Authenticating the header prevents an attacker from silently downgrading KDF parameters (e.g., lowering Argon2 memory cost to speed up brute-force). |
 | Atomic writes | `write tmp → rename` | Direct overwrite | Prevents vault corruption if the process is killed mid-write. POSIX `rename()` is atomic on the same filesystem. |
 | Memory zeroing | `OPENSSL_cleanse()` | `memset()` | `memset()` can be optimized away by the compiler. `OPENSSL_cleanse()` is guaranteed not to be elided. |
