@@ -111,9 +111,12 @@ TEST(GeneratePassword, ThrowsWhenLengthLessThanCharsetCount) {
 }
 
 // ── Bias check (rejection sampling) ──────────────────────────────────────────
-// Generate 1000 digits and verify each appears roughly 100 times (±40%).
-// A modulo-biased implementation would systematically over-represent
-// digits 0-5 (since 256 % 10 = 6).
+/**
+ * @brief Verify digit distribution is unbiased via rejection sampling.
+ * @details Generates 1000 digits and verifies each appears roughly 100 times (±40%).
+ *          A modulo-biased implementation would systematically over-represent
+ *          digits 0-5 (since 256 % 10 = 6).
+ */
 TEST(GeneratePassword, DigitDistributionNotBiased) {
     constexpr size_t kSamples = 1000;
     auto pw = generate_password(kSamples, Charset::Digits);

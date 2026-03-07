@@ -5,19 +5,23 @@
 #include <openssl/crypto.h>  // OPENSSL_cleanse
 #include <sys/mman.h>        // mlock, munlock
 
-// SecureBuffer — RAII wrapper for sensitive in-memory data.
-//
-// Guarantees:
-//   - Memory is zeroed on destruction via OPENSSL_cleanse() (compiler-safe,
-//     unlike memset which can be elided).
-//   - Best-effort mlock() prevents the pages from being swapped to disk.
-//     If mlock() fails (e.g. insufficient RLIMIT_MEMLOCK), we continue
-//     without locking — never fatal.
-//   - Copying is disabled; move transfers ownership and zeros the source.
-
+/**
+ * @brief RAII wrapper for sensitive in-memory data.
+ *
+ * @details Guarantees:
+ *   - Memory is zeroed on destruction via OPENSSL_cleanse() (compiler-safe,
+ *     unlike memset which can be elided).
+ *   - Best-effort mlock() prevents the pages from being swapped to disk.
+ *     If mlock() fails (e.g. insufficient RLIMIT_MEMLOCK), we continue
+ *     without locking — never fatal.
+ *   - Copying is disabled; move transfers ownership and zeros the source.
+ */
 class SecureBuffer {
 public:
-    // Allocates `size` zero-initialised bytes and attempts mlock.
+    /**
+     * @brief Allocates `size` zero-initialised bytes and attempts mlock.
+     * @param size Number of bytes to allocate (0 produces an empty buffer).
+     */
     explicit SecureBuffer(size_t size = 0)
         : size_(size), data_(nullptr), mlocked_(false)
     {
@@ -32,11 +36,11 @@ public:
 
     ~SecureBuffer() { release(); }
 
-    // No copy — would expose sensitive data in an untracked allocation.
+    /** @brief Copy disabled — would expose sensitive data in an untracked allocation. */
     SecureBuffer(const SecureBuffer&)            = delete;
     SecureBuffer& operator=(const SecureBuffer&) = delete;
 
-    // Move transfers ownership; source is left empty.
+    /** @brief Move constructor — transfers ownership; source is left empty. */
     SecureBuffer(SecureBuffer&& other) noexcept
         : size_(other.size_), data_(other.data_), mlocked_(other.mlocked_)
     {
@@ -67,7 +71,7 @@ public:
 
     // ── Utilities ────────────────────────────────────────────────────────────
 
-    // Explicit zero — useful before reuse without destruction.
+    /** @brief Explicitly zero the buffer contents — useful before reuse without destruction. */
     void wipe() noexcept {
         if (data_) OPENSSL_cleanse(data_, size_);
     }
