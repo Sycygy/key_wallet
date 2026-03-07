@@ -32,3 +32,6 @@ add_kw_test(test_secure_buffer test_secure_buffer.cpp)
 
 # ── Phase 1.3 — random ────────────────────────────────────────────────────────
 add_kw_test(test_random test_random.cpp ../src/crypto/random/random.cpp)
+
+# ── Phase 1.4 — kdf ───────────────────────────────────────────────────────────
+add_kw_test(test_kdf test_kdf.cpp ../src/crypto/kdf/kdf.cpp)
