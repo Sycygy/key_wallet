@@ -246,7 +246,28 @@ key_manager config --show               # display current expiry settings
 
 Changing `expiry_days` is a vault write operation and requires re-authentication.
 
-### 3.6 Memory Safety
+### 3.6 Entry Password Expiry
+
+Each `PasswordEntry` carries an `expires_at` field (uint64 unix timestamp; `0` = never expires). This is **advisory only** — it never blocks access to a password.
+
+**Enforcement:**
+
+| Operation | Behavior when `expires_at` is set and in the past |
+|-----------|-----------------------------------------------------|
+| `list` | Entry is marked with `[EXPIRED]` in the output |
+| `get` | Prints a warning before copying to clipboard (see message below). Password is still copied. |
+| `add` | User may optionally set `expires_at`; default is `0` (no expiry) |
+| `update <name>` | Manual rotation mechanism — prompts for new password, resets `updated_at`, optionally sets new `expires_at` |
+
+**Warning message (shown by `get` when expired):**
+```
+Warning: the password for <name> expired on <date>.
+Remember to change it on the website/account too, then run 'update <name>' to store the new one.
+```
+
+**Design rationale:** Entry expiry is informational. Hard-blocking `get` when a password is expired would leave the user unable to log in to a site while in the process of rotating the password. A warn-then-copy model is safer in practice — the user can still log in, change their password on the site, and then update the vault entry.
+
+### 3.7 Memory Safety
 
 - Master password buffer: zeroed with `OPENSSL_cleanse()` immediately after key derivation.
 - Derived key: stored in a `SecureBuffer` wrapper (see `core/`) that calls `OPENSSL_cleanse()` in its destructor.
@@ -376,7 +397,7 @@ key_manager/
 
 **`crypto/random`** — Wraps `RAND_bytes`. Provides `generate_password(length, charset)` and `random_bytes(n)`.
 
-**`storage/entry`** — Plain data struct: `{ id, website, username, password, created_at, updated_at }`. Serialized to/from a binary format.
+**`storage/entry`** — Plain data struct: `{ id, name, website, username, password, created_at, updated_at, expires_at }`. `expires_at = 0` means no expiry. Serialized to/from a binary format.
 
 **`storage/vault`** — Manages the on-disk vault file. Loads the encrypted blob, calls `aead::decrypt`, deserializes entries. On save: serializes, calls `aead::encrypt`, writes to disk atomically (write to `.tmp`, then `rename()`).
 

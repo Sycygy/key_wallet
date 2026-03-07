@@ -1,7 +1,6 @@
 # key_manager — Project Roadmap
 
-**Project:** Secure Password Manager  
-**Course:** CMPS 297AD/396AI — Applied Cryptography, AUB Fall 2025  
+**Project:** Secure Password Manager   
 **Stack:** C++ · OpenSSL 3.2+ · CMake · CLI → GUI  
 **Version:** 0.1
 
@@ -70,6 +69,7 @@ Phase 5 → GUI (stretch goal)
 
 ### 2.1 `storage/entry`
 - [ ] Define `PasswordEntry` struct: `{id, name, website, username, password, created_at, updated_at, expires_at}`
+  - `expires_at`: uint64 unix timestamp; `0` = never expires; warning-only, never blocks access
 - [ ] Define `BrowsableEntry` struct: same but `password` field is a zeroed `SecureBuffer` (not accessible)
 - [ ] Implement binary serialization: `serialize(entry) → bytes`
 - [ ] Implement binary deserialization: `deserialize(bytes) → PasswordEntry`
@@ -127,11 +127,11 @@ Implement the following subcommands:
 | Command | State Required | Description |
 |---------|---------------|-------------|
 | `init <vault_path>` | — | Create a new vault, prompt for master password |
-| `list` | BROWSING | List all entries (name, website, username, expires_at — no passwords) |
+| `list` | BROWSING | List all entries (name, website, username, expires_at — no passwords); marks expired entries with `[EXPIRED]` |
 | `search <query>` | BROWSING | Filter entries by name or website |
-| `get <name>` | BROWSING | Re-prompt master password → copy password to clipboard |
-| `add` | BROWSING | Re-prompt master password → add new entry |
-| `update <name>` | BROWSING | Re-prompt master password → update entry |
+| `get <name>` | BROWSING | Re-prompt master password → copy password to clipboard; prints warning if entry password is expired |
+| `add` | BROWSING | Re-prompt master password → add new entry; optionally set `expires_at` |
+| `update <name>` | BROWSING | Re-prompt master password → update entry fields; prompts for new password and optional new `expires_at`; resets `updated_at` |
 | `delete <name>` | BROWSING | Re-prompt master password → delete entry (with confirmation) |
 | `generate` | — | Generate and print a password without storing it |
 | `change-master` | BROWSING / EXPIRED | Re-prompt old + new master password → key rotation, resets expiry clock |
@@ -144,6 +144,7 @@ Implement the following subcommands:
 - [ ] Missing vault file → clear instructions to run `init`
 - [ ] Expired master password → "Master password expired N days ago. Run change-master to continue."
 - [ ] Warning period → "Master password expires in N days. Consider running change-master soon."
+- [ ] Entry password expired → "Warning: the password for <name> expired on <date>. Remember to change it on the website/account too, then run 'update <name>' to store the new one." (non-blocking — password is still copied)
 - [ ] No stack traces or internal paths in user-facing output
 
 **Phase 3 exit criteria:** All commands work end-to-end from the terminal. The vault file survives a restart. `list` works without re-authentication. `get` correctly gates behind master password re-entry. Expiry hard-blocks correctly after deadline and clears after `change-master`. Warning appears correctly in the 7-day window.
