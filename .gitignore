@@ -12,3 +12,6 @@
 
 # Misc
 *.log
+
+# Claude
+CLAUDE.md
