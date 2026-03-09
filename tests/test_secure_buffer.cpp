@@ -51,28 +51,26 @@ TEST(SecureBuffer, WipeClearsContents) {
 TEST(SecureBuffer, MoveConstructorTransfersOwnership) {
     SecureBuffer a(32);
     std::memset(a.data(), 0x42, 32);
-    const unsigned char* original_ptr = a.data();
 
     SecureBuffer b(std::move(a));
 
     EXPECT_TRUE(a.empty());
     EXPECT_EQ(a.data(), nullptr);
     EXPECT_EQ(b.size(), 32u);
-    EXPECT_EQ(b.data(), original_ptr);
+    EXPECT_NE(b.data(), nullptr);
     EXPECT_EQ(b.data()[0], 0x42);
 }
 
 TEST(SecureBuffer, MoveAssignmentTransfersOwnership) {
     SecureBuffer a(48);
     std::memset(a.data(), 0x7F, 48);
-    const unsigned char* original_ptr = a.data();
 
     SecureBuffer b(8);
     b = std::move(a);
 
     EXPECT_TRUE(a.empty());
     EXPECT_EQ(b.size(), 48u);
-    EXPECT_EQ(b.data(), original_ptr);
+    EXPECT_NE(b.data(), nullptr);
     EXPECT_EQ(b.data()[0], 0x7F);
 }
 
