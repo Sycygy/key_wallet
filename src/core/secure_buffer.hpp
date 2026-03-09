@@ -2,36 +2,45 @@
 
 #include <cstddef>
 #include <cstring>
-#include <openssl/crypto.h>  // OPENSSL_cleanse
-#include <sys/mman.h>        // mlock, munlock
+#include <openssl/crypto.h>  // OPENSSL_secure_malloc, OPENSSL_secure_clear_free
 
 /**
- * @brief RAII wrapper for sensitive in-memory data.
+ * @brief RAII wrapper for sensitive in-memory data using OpenSSL's secure heap.
  *
- * @details Guarantees:
- *   - Memory is zeroed on destruction via OPENSSL_cleanse() (compiler-safe,
- *     unlike memset which can be elided).
- *   - Best-effort mlock() prevents the pages from being swapped to disk.
- *     If mlock() fails (e.g. insufficient RLIMIT_MEMLOCK), we continue
- *     without locking — never fatal.
+ * @details Guarantees (v0.2):
+ *   - Memory allocated via OPENSSL_secure_malloc() from the secure heap arena,
+ *     which provides: page-aligned allocation, mlock, guard pages, and
+ *     MADV_DONTDUMP automatically.
+ *   - Memory zeroed on destruction via OPENSSL_secure_clear_free() which calls
+ *     OPENSSL_cleanse() before freeing (compiler-safe, unlike memset).
+ *   - Requires CRYPTO_secure_malloc_init() to have been called in main().
+ *     If the secure heap is not initialised, OPENSSL_secure_malloc falls back
+ *     to regular malloc — the buffer still works but without hardening.
  *   - Copying is disabled; move transfers ownership and zeros the source.
+ *
+ * @note v0.1 used new[] + manual mlock/munlock. v0.2 delegates all memory
+ *       hardening to OpenSSL's secure heap, which is more robust and provides
+ *       guard pages and MADV_DONTDUMP that the v0.1 approach lacked.
  */
 class SecureBuffer {
 public:
     /**
-     * @brief Allocates `size` zero-initialised bytes and attempts mlock.
+     * @brief Allocates `size` zero-initialised bytes from the OpenSSL secure heap.
      * @param size Number of bytes to allocate (0 produces an empty buffer).
      */
     explicit SecureBuffer(size_t size = 0)
-        : size_(size), data_(nullptr), mlocked_(false)
+        : size_(size), data_(nullptr)
     {
         if (size_ == 0) return;
 
-        data_ = new unsigned char[size_]();   // value-init → zeroed
-
-        if (mlock(data_, size_) == 0)
-            mlocked_ = true;
-        // mlock failure is silently ignored — best-effort
+        data_ = static_cast<unsigned char*>(OPENSSL_secure_malloc(size_));
+        if (!data_) {
+            // Secure heap exhausted or not initialised — fall back to regular malloc
+            data_ = static_cast<unsigned char*>(OPENSSL_malloc(size_));
+            if (!data_)
+                throw std::bad_alloc();
+        }
+        std::memset(data_, 0, size_);  // zero-init (secure heap does not guarantee this)
     }
 
     ~SecureBuffer() { release(); }
@@ -42,22 +51,19 @@ public:
 
     /** @brief Move constructor — transfers ownership; source is left empty. */
     SecureBuffer(SecureBuffer&& other) noexcept
-        : size_(other.size_), data_(other.data_), mlocked_(other.mlocked_)
+        : size_(other.size_), data_(other.data_)
     {
-        other.data_    = nullptr;
-        other.size_    = 0;
-        other.mlocked_ = false;
+        other.data_ = nullptr;
+        other.size_ = 0;
     }
 
     SecureBuffer& operator=(SecureBuffer&& other) noexcept {
         if (this != &other) {
             release();
-            size_    = other.size_;
-            data_    = other.data_;
-            mlocked_ = other.mlocked_;
-            other.data_    = nullptr;
-            other.size_    = 0;
-            other.mlocked_ = false;
+            size_ = other.size_;
+            data_ = other.data_;
+            other.data_ = nullptr;
+            other.size_ = 0;
         }
         return *this;
     }
@@ -79,16 +85,14 @@ public:
 private:
     void release() noexcept {
         if (data_) {
-            OPENSSL_cleanse(data_, size_);
-            if (mlocked_) munlock(data_, size_);
-            delete[] data_;
-            data_    = nullptr;
-            size_    = 0;
-            mlocked_ = false;
+            // OPENSSL_secure_clear_free calls OPENSSL_cleanse then frees from
+            // whichever heap the pointer belongs to (secure or regular).
+            OPENSSL_secure_clear_free(data_, size_);
+            data_ = nullptr;
+            size_ = 0;
         }
     }
 
     size_t         size_;
     unsigned char* data_;
-    bool           mlocked_;
 };
