@@ -3,6 +3,7 @@
 #include <openssl/rand.h>
 #include <stdexcept>
 #include <limits>
+#include <array>
 #include <cstdint>
 
 namespace {
@@ -144,4 +145,17 @@ std::string generate_password(size_t length, CharsetFlags flags) {
     secure_shuffle(result);
 
     return result;
+}
+
+std::array<uint8_t, 16> generate_uuid() {
+    std::array<uint8_t, 16> uuid{};
+    if (RAND_bytes(uuid.data(), static_cast<int>(uuid.size())) != 1)
+        throw std::runtime_error("generate_uuid: RAND_bytes failed");
+
+    // Set version 4 bits: uuid[6] high nibble = 0100
+    uuid[6] = (uuid[6] & 0x0F) | 0x40;
+    // Set variant bits: uuid[8] top 2 bits = 10
+    uuid[8] = (uuid[8] & 0x3F) | 0x80;
+
+    return uuid;
 }

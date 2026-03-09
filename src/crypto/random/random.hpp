@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -40,3 +41,14 @@ SecureBuffer random_bytes(size_t n);
  * @throws std::runtime_error if the PRNG fails.
  */
 std::string generate_password(size_t length, CharsetFlags flags = Charset::All);
+
+/**
+ * @brief Generate a random UUID v4 using RAND_bytes().
+ * @details Sets version bits (uuid[6] = (uuid[6] & 0x0F) | 0x40) and variant
+ *          bits (uuid[8] = (uuid[8] & 0x3F) | 0x80) per RFC 4122. The 122 bits
+ *          of randomness from RAND_bytes ensure UUIDs are unpredictable, which
+ *          is required for the HKDF info parameter to provide domain separation.
+ * @return 16-byte array containing a valid UUID v4.
+ * @throws std::runtime_error if RAND_bytes fails.
+ */
+std::array<uint8_t, 16> generate_uuid();

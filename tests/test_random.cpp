@@ -110,6 +110,39 @@ TEST(GeneratePassword, ThrowsWhenLengthLessThanCharsetCount) {
                  std::invalid_argument);
 }
 
+// ── generate_uuid ────────────────────────────────────────────────────────────
+
+TEST(GenerateUuid, Returns16Bytes) {
+    auto uuid = generate_uuid();
+    EXPECT_EQ(uuid.size(), 16u);
+}
+
+TEST(GenerateUuid, VersionBitsAreV4) {
+    auto uuid = generate_uuid();
+    // Version nibble (uuid[6] high nibble) must be 0x40 (version 4)
+    EXPECT_EQ(uuid[6] & 0xF0, 0x40);
+}
+
+TEST(GenerateUuid, VariantBitsAreRFC4122) {
+    auto uuid = generate_uuid();
+    // Variant bits (uuid[8] top 2 bits) must be 10xx xxxx
+    EXPECT_EQ(uuid[8] & 0xC0, 0x80);
+}
+
+TEST(GenerateUuid, TwoCallsDiffer) {
+    auto a = generate_uuid();
+    auto b = generate_uuid();
+    EXPECT_NE(a, b);
+}
+
+TEST(GenerateUuid, NotAllZero) {
+    auto uuid = generate_uuid();
+    bool all_zero = true;
+    for (auto byte : uuid)
+        if (byte != 0) { all_zero = false; break; }
+    EXPECT_FALSE(all_zero);
+}
+
 // ── Bias check (rejection sampling) ──────────────────────────────────────────
 /**
  * @brief Verify digit distribution is unbiased via rejection sampling.
