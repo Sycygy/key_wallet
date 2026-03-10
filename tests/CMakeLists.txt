@@ -38,3 +38,6 @@ add_kw_test(test_kdf test_kdf.cpp ../src/crypto/kdf/kdf.cpp)
 
 # ── Phase 1.5 — aead ─────────────────────────────────────────────────────────
 add_kw_test(test_aead test_aead.cpp ../src/crypto/aead/aead.cpp ../src/crypto/random/random.cpp)
+
+# ── Phase 2.1 — entry ────────────────────────────────────────────────────────
+add_kw_test(test_entry test_entry.cpp ../src/storage/entry.cpp ../src/crypto/random/random.cpp)
