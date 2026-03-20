@@ -445,3 +445,358 @@ TEST_F(VaultTest, EntryExpiresAtPreserved) {
     ASSERT_EQ(loaded.entries.size(), 1u);
     EXPECT_EQ(loaded.entries[0].expires_at, 1702592000u);
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Phase 2.3 — Entry CRUD on Vault
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ── vault_add_entry ─────────────────────────────────────────────────────────
+
+TEST_F(VaultTest, AddEntryCreatesUuidAndEncryptsPassword) {
+    auto pw = reinterpret_cast<const unsigned char*>(master_pw_.data());
+    Vault vault = create_vault(vault_path_, pw, master_pw_.size());
+
+    SecureBuffer password = make_password("my_secret_pw");
+    auto uuid = vault_add_entry(vault, "GitHub", "https://github.com",
+                                 "user1", password, 0);
+
+    ASSERT_EQ(vault.entries.size(), 1u);
+    ASSERT_EQ(vault.entry_passwords.size(), 1u);
+    EXPECT_EQ(vault.entries[0].id, uuid);
+    EXPECT_EQ(vault.entries[0].name, "GitHub");
+    EXPECT_EQ(vault.entries[0].website, "https://github.com");
+    EXPECT_EQ(vault.entries[0].username, "user1");
+    EXPECT_GT(vault.entries[0].created_at, 0u);
+    EXPECT_EQ(vault.entries[0].created_at, vault.entries[0].updated_at);
+
+    // Decrypt and verify password
+    PasswordEntry pe = get_entry_password(vault, uuid);
+    std::string decrypted(reinterpret_cast<const char*>(pe.password.data()),
+                           pe.password.size());
+    EXPECT_EQ(decrypted, "my_secret_pw");
+}
+
+TEST_F(VaultTest, AddEntryPersistsThroughSaveLoad) {
+    auto pw = reinterpret_cast<const unsigned char*>(master_pw_.data());
+    Vault vault = create_vault(vault_path_, pw, master_pw_.size());
+
+    SecureBuffer p1 = make_password("pw_one");
+    SecureBuffer p2 = make_password("pw_two");
+    auto id1 = vault_add_entry(vault, "Site1", "https://s1.com", "u1", p1);
+    auto id2 = vault_add_entry(vault, "Site2", "https://s2.com", "u2", p2, 1702592000);
+    save_vault(vault);
+
+    Vault loaded = load_vault(vault_path_, pw, master_pw_.size());
+    ASSERT_EQ(loaded.entries.size(), 2u);
+    EXPECT_EQ(loaded.entries[0].name, "Site1");
+    EXPECT_EQ(loaded.entries[1].name, "Site2");
+    EXPECT_EQ(loaded.entries[1].expires_at, 1702592000u);
+
+    PasswordEntry pe1 = get_entry_password(loaded, id1);
+    std::string d1(reinterpret_cast<const char*>(pe1.password.data()), pe1.password.size());
+    EXPECT_EQ(d1, "pw_one");
+
+    PasswordEntry pe2 = get_entry_password(loaded, id2);
+    std::string d2(reinterpret_cast<const char*>(pe2.password.data()), pe2.password.size());
+    EXPECT_EQ(d2, "pw_two");
+}
+
+TEST_F(VaultTest, AddEntryLockedVaultThrows) {
+    Vault vault;  // no vault_key
+    SecureBuffer password = make_password("pw");
+    EXPECT_THROW(vault_add_entry(vault, "X", "X", "X", password), std::runtime_error);
+}
+
+// ── vault_find_entries ──────────────────────────────────────────────────────
+
+TEST_F(VaultTest, FindEntriesByName) {
+    auto pw = reinterpret_cast<const unsigned char*>(master_pw_.data());
+    Vault vault = create_vault(vault_path_, pw, master_pw_.size());
+
+    SecureBuffer p = make_password("pw");
+    vault_add_entry(vault, "GitHub", "https://github.com", "u1", p);
+    vault_add_entry(vault, "GitLab", "https://gitlab.com", "u2", p);
+    vault_add_entry(vault, "Bitbucket", "https://bitbucket.org", "u3", p);
+
+    auto results = vault_find_entries(vault, "git");
+    ASSERT_EQ(results.size(), 2u);
+    // Both GitHub and GitLab should match
+    bool found_gh = false, found_gl = false;
+    for (const auto& r : results) {
+        if (r.name == "GitHub") found_gh = true;
+        if (r.name == "GitLab") found_gl = true;
+    }
+    EXPECT_TRUE(found_gh);
+    EXPECT_TRUE(found_gl);
+}
+
+TEST_F(VaultTest, FindEntriesByWebsite) {
+    auto pw = reinterpret_cast<const unsigned char*>(master_pw_.data());
+    Vault vault = create_vault(vault_path_, pw, master_pw_.size());
+
+    SecureBuffer p = make_password("pw");
+    vault_add_entry(vault, "Work", "https://corp.example.com", "admin", p);
+    vault_add_entry(vault, "Personal", "https://personal.example.com", "me", p);
+    vault_add_entry(vault, "Other", "https://other.io", "user", p);
+
+    auto results = vault_find_entries(vault, "example.com");
+    ASSERT_EQ(results.size(), 2u);
+}
+
+TEST_F(VaultTest, FindEntriesCaseInsensitive) {
+    auto pw = reinterpret_cast<const unsigned char*>(master_pw_.data());
+    Vault vault = create_vault(vault_path_, pw, master_pw_.size());
+
+    SecureBuffer p = make_password("pw");
+    vault_add_entry(vault, "GitHub", "https://github.com", "u1", p);
+
+    auto r1 = vault_find_entries(vault, "GITHUB");
+    EXPECT_EQ(r1.size(), 1u);
+
+    auto r2 = vault_find_entries(vault, "github");
+    EXPECT_EQ(r2.size(), 1u);
+
+    auto r3 = vault_find_entries(vault, "GiTh");
+    EXPECT_EQ(r3.size(), 1u);
+}
+
+TEST_F(VaultTest, FindEntriesNoMatch) {
+    auto pw = reinterpret_cast<const unsigned char*>(master_pw_.data());
+    Vault vault = create_vault(vault_path_, pw, master_pw_.size());
+
+    SecureBuffer p = make_password("pw");
+    vault_add_entry(vault, "GitHub", "https://github.com", "u1", p);
+
+    auto results = vault_find_entries(vault, "nonexistent");
+    EXPECT_EQ(results.size(), 0u);
+}
+
+TEST_F(VaultTest, FindEntriesEmptyQuery) {
+    auto pw = reinterpret_cast<const unsigned char*>(master_pw_.data());
+    Vault vault = create_vault(vault_path_, pw, master_pw_.size());
+
+    SecureBuffer p = make_password("pw");
+    vault_add_entry(vault, "GitHub", "https://github.com", "u1", p);
+
+    auto results = vault_find_entries(vault, "");
+    EXPECT_EQ(results.size(), 0u);
+}
+
+// ── vault_update_entry ──────────────────────────────────────────────────────
+
+TEST_F(VaultTest, UpdateEntryMetadataOnly) {
+    auto pw = reinterpret_cast<const unsigned char*>(master_pw_.data());
+    Vault vault = create_vault(vault_path_, pw, master_pw_.size());
+
+    SecureBuffer p = make_password("original_pw");
+    auto uuid = vault_add_entry(vault, "OldName", "https://old.com", "olduser", p);
+
+    // Update name and website, keep password (empty SecureBuffer)
+    SecureBuffer empty_pw;
+    vault_update_entry(vault, uuid, "NewName", "https://new.com", "newuser",
+                        empty_pw, 0);
+
+    EXPECT_EQ(vault.entries[0].name, "NewName");
+    EXPECT_EQ(vault.entries[0].website, "https://new.com");
+    EXPECT_EQ(vault.entries[0].username, "newuser");
+
+    // Password should still be the original
+    PasswordEntry pe = get_entry_password(vault, uuid);
+    std::string decrypted(reinterpret_cast<const char*>(pe.password.data()),
+                           pe.password.size());
+    EXPECT_EQ(decrypted, "original_pw");
+}
+
+TEST_F(VaultTest, UpdateEntryWithNewPassword) {
+    auto pw = reinterpret_cast<const unsigned char*>(master_pw_.data());
+    Vault vault = create_vault(vault_path_, pw, master_pw_.size());
+
+    SecureBuffer p = make_password("old_password");
+    auto uuid = vault_add_entry(vault, "Site", "https://site.com", "user", p);
+
+    SecureBuffer new_pw = make_password("brand_new_password!");
+    vault_update_entry(vault, uuid, "", "", "", new_pw, 0);
+
+    // Name should be unchanged (empty string = keep existing)
+    EXPECT_EQ(vault.entries[0].name, "Site");
+
+    // Password should be updated
+    PasswordEntry pe = get_entry_password(vault, uuid);
+    std::string decrypted(reinterpret_cast<const char*>(pe.password.data()),
+                           pe.password.size());
+    EXPECT_EQ(decrypted, "brand_new_password!");
+}
+
+TEST_F(VaultTest, UpdateEntryPersistsThroughSaveLoad) {
+    auto pw = reinterpret_cast<const unsigned char*>(master_pw_.data());
+    Vault vault = create_vault(vault_path_, pw, master_pw_.size());
+
+    SecureBuffer p = make_password("pw");
+    auto uuid = vault_add_entry(vault, "Site", "https://site.com", "user", p);
+
+    SecureBuffer new_pw = make_password("updated_pw");
+    vault_update_entry(vault, uuid, "UpdatedSite", "", "", new_pw, 1702592000);
+    save_vault(vault);
+
+    Vault loaded = load_vault(vault_path_, pw, master_pw_.size());
+    ASSERT_EQ(loaded.entries.size(), 1u);
+    EXPECT_EQ(loaded.entries[0].name, "UpdatedSite");
+    EXPECT_EQ(loaded.entries[0].expires_at, 1702592000u);
+
+    PasswordEntry pe = get_entry_password(loaded, uuid);
+    std::string decrypted(reinterpret_cast<const char*>(pe.password.data()),
+                           pe.password.size());
+    EXPECT_EQ(decrypted, "updated_pw");
+}
+
+TEST_F(VaultTest, UpdateEntryNotFoundThrows) {
+    auto pw = reinterpret_cast<const unsigned char*>(master_pw_.data());
+    Vault vault = create_vault(vault_path_, pw, master_pw_.size());
+
+    auto fake_id = generate_uuid();
+    SecureBuffer p = make_password("pw");
+    EXPECT_THROW(vault_update_entry(vault, fake_id, "X", "X", "X", p, 0),
+                 std::runtime_error);
+}
+
+TEST_F(VaultTest, UpdateEntrySetsUpdatedAt) {
+    auto pw = reinterpret_cast<const unsigned char*>(master_pw_.data());
+    Vault vault = create_vault(vault_path_, pw, master_pw_.size());
+
+    SecureBuffer p = make_password("pw");
+    auto uuid = vault_add_entry(vault, "Site", "https://site.com", "user", p);
+    uint64_t original_updated = vault.entries[0].updated_at;
+
+    SecureBuffer empty_pw;
+    vault_update_entry(vault, uuid, "NewName", "", "", empty_pw, 0);
+    EXPECT_GE(vault.entries[0].updated_at, original_updated);
+}
+
+// ── vault_delete_entry ──────────────────────────────────────────────────────
+
+TEST_F(VaultTest, DeleteEntryRemovesBoth) {
+    auto pw = reinterpret_cast<const unsigned char*>(master_pw_.data());
+    Vault vault = create_vault(vault_path_, pw, master_pw_.size());
+
+    SecureBuffer p = make_password("pw");
+    auto id1 = vault_add_entry(vault, "Site1", "https://s1.com", "u1", p);
+    auto id2 = vault_add_entry(vault, "Site2", "https://s2.com", "u2", p);
+    auto id3 = vault_add_entry(vault, "Site3", "https://s3.com", "u3", p);
+
+    ASSERT_EQ(vault.entries.size(), 3u);
+    ASSERT_EQ(vault.entry_passwords.size(), 3u);
+
+    vault_delete_entry(vault, id2);
+
+    ASSERT_EQ(vault.entries.size(), 2u);
+    ASSERT_EQ(vault.entry_passwords.size(), 2u);
+    EXPECT_EQ(vault.entries[0].name, "Site1");
+    EXPECT_EQ(vault.entries[1].name, "Site3");
+
+    // Remaining entries should still decrypt correctly
+    PasswordEntry pe1 = get_entry_password(vault, id1);
+    PasswordEntry pe3 = get_entry_password(vault, id3);
+    std::string d1(reinterpret_cast<const char*>(pe1.password.data()), pe1.password.size());
+    std::string d3(reinterpret_cast<const char*>(pe3.password.data()), pe3.password.size());
+    EXPECT_EQ(d1, "pw");
+    EXPECT_EQ(d3, "pw");
+}
+
+TEST_F(VaultTest, DeleteEntryPersistsThroughSaveLoad) {
+    auto pw = reinterpret_cast<const unsigned char*>(master_pw_.data());
+    Vault vault = create_vault(vault_path_, pw, master_pw_.size());
+
+    SecureBuffer p = make_password("pw");
+    auto id1 = vault_add_entry(vault, "Keep", "https://keep.com", "u1", p);
+    vault_add_entry(vault, "Delete", "https://delete.com", "u2", p);
+
+    vault_delete_entry(vault, vault.entries[1].id);
+    save_vault(vault);
+
+    Vault loaded = load_vault(vault_path_, pw, master_pw_.size());
+    ASSERT_EQ(loaded.entries.size(), 1u);
+    EXPECT_EQ(loaded.entries[0].name, "Keep");
+
+    PasswordEntry pe = get_entry_password(loaded, id1);
+    std::string decrypted(reinterpret_cast<const char*>(pe.password.data()),
+                           pe.password.size());
+    EXPECT_EQ(decrypted, "pw");
+}
+
+TEST_F(VaultTest, DeleteEntryNotFoundThrows) {
+    auto pw = reinterpret_cast<const unsigned char*>(master_pw_.data());
+    Vault vault = create_vault(vault_path_, pw, master_pw_.size());
+
+    auto fake_id = generate_uuid();
+    EXPECT_THROW(vault_delete_entry(vault, fake_id), std::runtime_error);
+}
+
+TEST_F(VaultTest, DeleteAllEntries) {
+    auto pw = reinterpret_cast<const unsigned char*>(master_pw_.data());
+    Vault vault = create_vault(vault_path_, pw, master_pw_.size());
+
+    SecureBuffer p = make_password("pw");
+    auto id1 = vault_add_entry(vault, "S1", "https://s1.com", "u1", p);
+    auto id2 = vault_add_entry(vault, "S2", "https://s2.com", "u2", p);
+
+    vault_delete_entry(vault, id1);
+    vault_delete_entry(vault, id2);
+
+    EXPECT_EQ(vault.entries.size(), 0u);
+    EXPECT_EQ(vault.entry_passwords.size(), 0u);
+
+    save_vault(vault);
+    Vault loaded = load_vault(vault_path_, pw, master_pw_.size());
+    EXPECT_EQ(loaded.entries.size(), 0u);
+}
+
+// ── CRUD integration ────────────────────────────────────────────────────────
+
+TEST_F(VaultTest, FullCrudLifecycle) {
+    auto pw = reinterpret_cast<const unsigned char*>(master_pw_.data());
+    Vault vault = create_vault(vault_path_, pw, master_pw_.size());
+
+    // Add
+    SecureBuffer p1 = make_password("github_pass");
+    SecureBuffer p2 = make_password("gitlab_pass");
+    auto gh_id = vault_add_entry(vault, "GitHub", "https://github.com", "dev", p1);
+    auto gl_id = vault_add_entry(vault, "GitLab", "https://gitlab.com", "dev", p2);
+    ASSERT_EQ(vault.entries.size(), 2u);
+
+    // Find
+    auto found = vault_find_entries(vault, "git");
+    EXPECT_EQ(found.size(), 2u);
+
+    found = vault_find_entries(vault, "github");
+    ASSERT_EQ(found.size(), 1u);
+    EXPECT_EQ(found[0].name, "GitHub");
+
+    // Get (decrypt on demand)
+    PasswordEntry pe = get_entry_password(vault, gh_id);
+    std::string d(reinterpret_cast<const char*>(pe.password.data()), pe.password.size());
+    EXPECT_EQ(d, "github_pass");
+
+    // Update
+    SecureBuffer new_pw = make_password("new_github_pass!");
+    vault_update_entry(vault, gh_id, "", "https://github.com/new", "", new_pw, 0);
+    EXPECT_EQ(vault.entries[0].website, "https://github.com/new");
+
+    pe = get_entry_password(vault, gh_id);
+    d = std::string(reinterpret_cast<const char*>(pe.password.data()), pe.password.size());
+    EXPECT_EQ(d, "new_github_pass!");
+
+    // Delete
+    vault_delete_entry(vault, gl_id);
+    ASSERT_EQ(vault.entries.size(), 1u);
+    EXPECT_THROW(get_entry_password(vault, gl_id), std::runtime_error);
+
+    // Save and reload
+    save_vault(vault);
+    Vault loaded = load_vault(vault_path_, pw, master_pw_.size());
+    ASSERT_EQ(loaded.entries.size(), 1u);
+    EXPECT_EQ(loaded.entries[0].name, "GitHub");
+
+    pe = get_entry_password(loaded, gh_id);
+    d = std::string(reinterpret_cast<const char*>(pe.password.data()), pe.password.size());
+    EXPECT_EQ(d, "new_github_pass!");
+}

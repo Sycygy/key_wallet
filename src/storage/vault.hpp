@@ -139,6 +139,80 @@ void save_vault(Vault& vault);
 PasswordEntry get_entry_password(const Vault& vault,
                                  const std::array<uint8_t, 16>& id);
 
+// ── Entry CRUD ──────────────────────────────────────────────────────────────
+
+/**
+ * @brief Add a new entry to the vault.
+ *
+ * Generates a UUID, sets timestamps, derives entry_key via HKDF, encrypts
+ * the password, and appends the entry to the index and ciphertext vectors.
+ * Call save_vault() afterwards to persist changes to disk.
+ *
+ * @param vault    The vault to add the entry to (must have vault_key).
+ * @param name     Entry name (e.g., service name).
+ * @param website  Website URL.
+ * @param username Username / email.
+ * @param password Password to encrypt (stored in SecureBuffer).
+ * @param expires_at Optional expiry timestamp (0 = no expiry).
+ * @return The UUID assigned to the new entry.
+ * @throws std::runtime_error if vault_key is not available.
+ */
+std::array<uint8_t, 16> vault_add_entry(Vault& vault,
+                                         const std::string& name,
+                                         const std::string& website,
+                                         const std::string& username,
+                                         const SecureBuffer& password,
+                                         uint64_t expires_at = 0);
+
+/**
+ * @brief Find entries whose name or website contains the query (case-insensitive substring match).
+ *
+ * Searches only the decrypted index — no passwords are touched.
+ *
+ * @param vault The vault to search.
+ * @param query Substring to match against name and website fields.
+ * @return Vector of matching BrowsableEntry objects (no passwords).
+ */
+std::vector<BrowsableEntry> vault_find_entries(const Vault& vault,
+                                                const std::string& query);
+
+/**
+ * @brief Update an existing entry's fields.
+ *
+ * If a new password is provided (non-empty SecureBuffer), the entry's password
+ * ciphertext is re-encrypted under the same entry_key (UUID is preserved).
+ * Updated fields: name, website, username, password (if provided), expires_at.
+ * The updated_at timestamp is set to now.
+ *
+ * @param vault      The vault containing the entry.
+ * @param id         UUID of the entry to update.
+ * @param name       New name (empty string = keep existing).
+ * @param website    New website (empty string = keep existing).
+ * @param username   New username (empty string = keep existing).
+ * @param password   New password (empty SecureBuffer = keep existing).
+ * @param expires_at New expiry timestamp (pass existing value to keep, 0 = disable).
+ * @throws std::runtime_error if entry not found or vault_key unavailable.
+ */
+void vault_update_entry(Vault& vault,
+                         const std::array<uint8_t, 16>& id,
+                         const std::string& name,
+                         const std::string& website,
+                         const std::string& username,
+                         const SecureBuffer& password,
+                         uint64_t expires_at);
+
+/**
+ * @brief Delete an entry from the vault.
+ *
+ * Removes the entry from the index and its ciphertext block.
+ * Call save_vault() afterwards to persist changes to disk.
+ *
+ * @param vault The vault to remove the entry from.
+ * @param id    UUID of the entry to delete.
+ * @throws std::runtime_error if entry not found.
+ */
+void vault_delete_entry(Vault& vault, const std::array<uint8_t, 16>& id);
+
 /**
  * @brief Re-derive the vault key from a candidate password and verify it
  *        against the stored verification token.

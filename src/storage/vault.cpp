@@ -424,6 +424,141 @@ PasswordEntry get_entry_password(const Vault& vault,
     return pe;
 }
 
+// ── Entry CRUD ──────────────────────────────────────────────────────────────
+
+std::array<uint8_t, 16> vault_add_entry(Vault& vault,
+                                         const std::string& name,
+                                         const std::string& website,
+                                         const std::string& username,
+                                         const SecureBuffer& password,
+                                         uint64_t expires_at) {
+    if (vault.vault_key.empty())
+        throw std::runtime_error("Vault key not available — vault is locked");
+
+    auto uuid = generate_uuid();
+    uint64_t now = now_unix();
+
+    // Add to index
+    BrowsableEntry be;
+    be.id         = uuid;
+    be.name       = name;
+    be.website    = website;
+    be.username   = username;
+    be.created_at = now;
+    be.updated_at = now;
+    be.expires_at = expires_at;
+    vault.entries.push_back(std::move(be));
+
+    // Derive entry key and encrypt password
+    SecureBuffer entry_key = derive_entry_key(vault.vault_key, uuid);
+    auto pw_serialized = serialize_password(password);
+    auto aad = build_aad(vault);
+    auto ct = aead_encrypt(entry_key,
+                           pw_serialized.data(), pw_serialized.size(),
+                           aad.data(), aad.size());
+
+    EntryCiphertext ec;
+    ec.iv         = std::move(ct.iv);
+    ec.tag        = std::move(ct.tag);
+    ec.ciphertext = std::move(ct.ciphertext);
+    vault.entry_passwords.push_back(std::move(ec));
+
+    return uuid;
+}
+
+std::vector<BrowsableEntry> vault_find_entries(const Vault& vault,
+                                                const std::string& query) {
+    std::vector<BrowsableEntry> results;
+    if (query.empty())
+        return results;
+
+    // Case-insensitive substring match
+    std::string lower_query = query;
+    std::transform(lower_query.begin(), lower_query.end(),
+                   lower_query.begin(), ::tolower);
+
+    for (const auto& entry : vault.entries) {
+        std::string lower_name = entry.name;
+        std::transform(lower_name.begin(), lower_name.end(),
+                       lower_name.begin(), ::tolower);
+        std::string lower_website = entry.website;
+        std::transform(lower_website.begin(), lower_website.end(),
+                       lower_website.begin(), ::tolower);
+
+        if (lower_name.find(lower_query) != std::string::npos ||
+            lower_website.find(lower_query) != std::string::npos) {
+            results.push_back(entry);
+        }
+    }
+
+    return results;
+}
+
+void vault_update_entry(Vault& vault,
+                         const std::array<uint8_t, 16>& id,
+                         const std::string& name,
+                         const std::string& website,
+                         const std::string& username,
+                         const SecureBuffer& password,
+                         uint64_t expires_at) {
+    if (vault.vault_key.empty())
+        throw std::runtime_error("Vault key not available — vault is locked");
+
+    // Find entry index
+    size_t idx = 0;
+    bool found = false;
+    for (size_t i = 0; i < vault.entries.size(); ++i) {
+        if (vault.entries[i].id == id) {
+            idx = i;
+            found = true;
+            break;
+        }
+    }
+    if (!found)
+        throw std::runtime_error("Entry not found");
+
+    auto& entry = vault.entries[idx];
+
+    // Update fields (empty string = keep existing)
+    if (!name.empty())     entry.name     = name;
+    if (!website.empty())  entry.website  = website;
+    if (!username.empty()) entry.username = username;
+    entry.expires_at = expires_at;
+    entry.updated_at = now_unix();
+
+    // If password provided, re-encrypt under same entry_key (UUID preserved)
+    if (!password.empty()) {
+        SecureBuffer entry_key = derive_entry_key(vault.vault_key, id);
+        auto pw_serialized = serialize_password(password);
+        auto aad = build_aad(vault);
+        auto ct = aead_encrypt(entry_key,
+                               pw_serialized.data(), pw_serialized.size(),
+                               aad.data(), aad.size());
+
+        vault.entry_passwords[idx].iv         = std::move(ct.iv);
+        vault.entry_passwords[idx].tag        = std::move(ct.tag);
+        vault.entry_passwords[idx].ciphertext = std::move(ct.ciphertext);
+    }
+}
+
+void vault_delete_entry(Vault& vault, const std::array<uint8_t, 16>& id) {
+    // Find entry index
+    size_t idx = 0;
+    bool found = false;
+    for (size_t i = 0; i < vault.entries.size(); ++i) {
+        if (vault.entries[i].id == id) {
+            idx = i;
+            found = true;
+            break;
+        }
+    }
+    if (!found)
+        throw std::runtime_error("Entry not found");
+
+    vault.entries.erase(vault.entries.begin() + static_cast<ptrdiff_t>(idx));
+    vault.entry_passwords.erase(vault.entry_passwords.begin() + static_cast<ptrdiff_t>(idx));
+}
+
 bool verify_master_password(const Vault& vault,
                             const unsigned char* password, size_t pw_len) {
     if (!password || pw_len == 0)

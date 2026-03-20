@@ -124,12 +124,12 @@ Phase 5 → GUI (stretch goal)
 - [ ] Unit test: create → load round-trip; tampered file → error; wrong password → error; per-entry decrypt; version detection
 
 ### 2.3 Entry CRUD on Vault
-- [ ] `vault.add_entry(entry)` — generates UUID, derives entry_key, encrypts password separately
-- [ ] `vault.get_entry(id) → PasswordEntry` — on-demand HKDF + decrypt
-- [ ] `vault.find_entries(website) → vector<BrowsableEntry>` (substring match, no passwords)
-- [ ] `vault.update_entry(id, fields)` — if password changed, re-encrypts with same entry_key (UUID preserved)
-- [ ] `vault.delete_entry(id)` — removes from index and removes ciphertext block
-- [ ] Unit test: all CRUD operations; lookup on nonexistent entry → error
+- [x] `vault.add_entry(entry)` — generates UUID, derives entry_key, encrypts password separately
+- [x] `vault.get_entry(id) → PasswordEntry` — on-demand HKDF + decrypt
+- [x] `vault.find_entries(website) → vector<BrowsableEntry>` (substring match, no passwords)
+- [x] `vault.update_entry(id, fields)` — if password changed, re-encrypts with same entry_key (UUID preserved)
+- [x] `vault.delete_entry(id)` — removes from index and removes ciphertext block
+- [x] Unit test: all CRUD operations; lookup on nonexistent entry → error
 
 **Phase 2 exit criteria:** A test program can create a vault, add entries, save it, reload it, and retrieve entries correctly. The vault file is opaque binary. `load_vault` only decrypts the index — passwords are not in RAM after load.
 
