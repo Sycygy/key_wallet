@@ -49,3 +49,12 @@ add_kw_test(test_vault test_vault.cpp
     ../src/crypto/aead/aead.cpp
     ../src/crypto/kdf/kdf.cpp
     ../src/crypto/random/random.cpp)
+
+# ── Phase 3.2 — session ───────────────────────────────────────────────────
+add_kw_test(test_session test_session.cpp
+    ../src/core/session.cpp
+    ../src/storage/vault.cpp
+    ../src/storage/entry.cpp
+    ../src/crypto/aead/aead.cpp
+    ../src/crypto/kdf/kdf.cpp
+    ../src/crypto/random/random.cpp)
