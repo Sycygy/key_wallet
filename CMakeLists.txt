@@ -16,7 +16,10 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 find_package(OpenSSL 3.2 REQUIRED)
 
 # ── Main executable ──────────────────────────────────────────────────────────
-add_executable(key_wallet src/main.cpp)
+add_executable(key_wallet
+    src/main.cpp
+    src/cli/input.cpp
+)
 
 target_include_directories(key_wallet PRIVATE
     ${CMAKE_SOURCE_DIR}/src

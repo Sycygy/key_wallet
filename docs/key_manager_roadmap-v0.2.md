@@ -140,10 +140,10 @@ Phase 5 → GUI (stretch goal)
 **Goal:** A fully usable command-line password manager.
 
 ### 3.1 `cli/input`
-- [ ] Masked password input using `termios` (disable echo)
-- [ ] Restore terminal state on SIGINT / unexpected exit
-- [ ] Clipboard write: `xclip` / `xsel` on Linux, `pbcopy` on macOS
-- [ ] Clipboard clear: overwrite after configurable timeout (default 30s) in background thread
+- [x] Masked password input using `termios` (disable echo)
+- [x] Restore terminal state on SIGINT / unexpected exit
+- [x] Clipboard write: `xclip` / `xsel` on Linux, `pbcopy` on macOS
+- [x] Clipboard clear: overwrite after configurable timeout (default 30s) in background thread
 
 ### 3.2 `core/session`
 - [ ] Implement LOCKED / EXPIRED / BROWSING / RETRIEVING state machine
