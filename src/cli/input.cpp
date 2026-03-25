@@ -78,16 +78,20 @@ SecureBuffer read_password(const std::string& prompt) {
 
 bool write_clipboard(std::string_view text) {
 #if defined(__APPLE__)
-    const char* cmd = "pbcopy";
-    FILE* pipe = popen(cmd, "w");
+    // Redirect stderr to suppress "not found" noise from the shell.
+    FILE* pipe = popen("pbcopy 2>/dev/null", "w");
     if (!pipe) return false;
     fwrite(text.data(), 1, text.size(), pipe);
     return pclose(pipe) == 0;
 #else
-    // Try xclip then xsel; both read from stdin.
-    const std::array<const char*, 2> candidates = {
-        "xclip -selection clipboard",
-        "xsel --clipboard --input",
+    // Candidates in preference order.
+    // stderr is redirected in each command to suppress "not found" shell noise.
+    // clip.exe covers WSL (writes to the Windows clipboard).
+    const std::array<const char*, 4> candidates = {
+        "xclip -selection clipboard 2>/dev/null",
+        "xsel --clipboard --input 2>/dev/null",
+        "wl-copy 2>/dev/null",
+        "/mnt/c/Windows/System32/clip.exe 2>/dev/null",
     };
     for (const char* cmd : candidates) {
         FILE* pipe = popen(cmd, "w");

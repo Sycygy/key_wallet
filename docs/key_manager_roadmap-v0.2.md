@@ -163,26 +163,25 @@ Implement the following subcommands:
 
 | Command | State Required | Description |
 |---------|---------------|-------------|
-| `init <vault_path>` | — | Create a new vault, prompt for master password |
-| `list` | BROWSING | List all entries (name, website, username, expires_at — no passwords) |
-| `search <query>` | BROWSING | Filter entries by name or website |
-| `get <name>` | BROWSING | Re-prompt master password → derive entry key → copy password to clipboard |
-| `add` | BROWSING | Re-prompt master password → add new entry (UUID auto-generated) |
-| `update <name>` | BROWSING | Re-prompt master password → update entry |
-| `delete <name>` | BROWSING | Re-prompt master password → delete entry (with confirmation) |
-| `generate` | — | Generate and print a password without storing it |
-| `change-master` | BROWSING / EXPIRED | Re-prompt old + new master password → key rotation, re-encrypt all entries |
-| `config --expiry-days <N>` | BROWSING | Re-prompt master password → set expiry interval (0 = disable) |
-| `config --show` | BROWSING | Display current expiry settings and days remaining |
+| ✅ `init <vault_path>` | — | Create a new vault, prompt for master password |
+| ✅ `list` | BROWSING | List all entries (name, website, username, expires_at — no passwords) |
+| ✅ `search <query>` | BROWSING | Filter entries by name or website |
+| ✅ `get <name>` | BROWSING | Re-prompt master password → derive entry key → copy password to clipboard |
+| ✅ `add` | BROWSING | Re-prompt master password → add new entry (UUID auto-generated) |
+| ✅ `update <name>` | BROWSING | Re-prompt master password → update entry |
+| ✅ `delete <name>` | BROWSING | Re-prompt master password → delete entry (with confirmation) |
+| ✅ `generate` | — | Generate and print a password without storing it |
+| ✅ `change-master` | BROWSING / EXPIRED | Re-prompt old + new master password → key rotation, re-encrypt all entries |
+| ✅ `config --expiry-days <N>` | BROWSING | Re-prompt master password → set expiry interval (0 = disable) |
+| ✅ `config --show` | BROWSING | Display current expiry settings and days remaining |
 
 ### 3.4 Error Handling
-- [ ] All errors print a user-facing message without leaking cryptographic details
-- [ ] Wrong master password → "Authentication failed" (not "Tag mismatch")
-- [ ] Missing vault file → clear instructions to run `init`
-- [ ] v0.1 vault detected → "This vault was created with key_manager v0.1 and must be migrated. Run: key_manager migrate <vault_path>"
-- [ ] Expired master password → "Master password expired N days ago. Run change-master to continue."
-- [ ] Warning period → "Master password expires in N days. Consider running change-master soon."
-- [ ] No stack traces or internal paths in user-facing output
+- [x] All errors print a user-facing message without leaking cryptographic details
+- [x] Wrong master password → "Authentication failed" (not "Tag mismatch")
+- [x] Missing vault file → clear instructions to run `init`
+- [x] Expired master password → "Master password expired N days ago. Run change-master to continue."
+- [x] Warning period → "Master password expires in N days. Consider running change-master soon."
+- [x] No stack traces or internal paths in user-facing output
 
 **Phase 3 exit criteria:** All commands work end-to-end from the terminal. The vault file survives a restart. `list` works without re-authentication and shows no passwords. `get` correctly gates behind master password re-entry and derives entry key on demand.
 
@@ -208,15 +207,11 @@ Implement the following subcommands:
 ### 4.3 Auto-lock & Timeout Polish
 - [ ] Confirm auto-lock fires reliably under SIGTERM and SIGHUP
 - [ ] Ensure clipboard is cleared even if the app is killed (best-effort via `atexit`)
+- [ ] Fix clipboard clear: replace detached `std::thread` in `schedule_clipboard_clear()` with `fork()` so the clear process survives the parent exiting — current CLI design exits immediately after `get`, killing the thread before the 30-second timer fires
 
 ### 4.4 Vault Integrity Warnings
 - [ ] Detect and warn if vault file permissions are too permissive (e.g., world-readable)
 - [ ] Warn if vault is stored in a world-readable directory
-
-### 4.5 Migration Utility
-- [ ] Implement `key_manager migrate <vault_path>` to convert v0.1 → v0.2 vaults
-- [ ] Load v0.1 format, re-encrypt as v0.2 two-layer format
-- [ ] Atomic write, confirm success before deleting old file
 
 **Phase 4 exit criteria:** No sensitive strings visible in a post-mortem core dump. Fuzzer runs 10k iterations without crashes. v0.1 migration tested.
 

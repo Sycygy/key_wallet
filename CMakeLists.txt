@@ -18,7 +18,14 @@ find_package(OpenSSL 3.2 REQUIRED)
 # ── Main executable ──────────────────────────────────────────────────────────
 add_executable(key_wallet
     src/main.cpp
+    src/cli/commands.cpp
     src/cli/input.cpp
+    src/core/session.cpp
+    src/storage/entry.cpp
+    src/storage/vault.cpp
+    src/crypto/aead/aead.cpp
+    src/crypto/kdf/kdf.cpp
+    src/crypto/random/random.cpp
 )
 
 target_include_directories(key_wallet PRIVATE
