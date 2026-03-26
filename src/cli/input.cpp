@@ -11,8 +11,6 @@
 #include <termios.h>
 #include <unistd.h>
 
-#include <openssl/crypto.h>  // OPENSSL_cleanse
-
 namespace cli {
 
 // ── Terminal state ─────────────────────────────────────────────────────────────
@@ -53,9 +51,9 @@ SecureBuffer read_password(const std::string& prompt) {
         tcsetattr(STDIN_FILENO, TCSANOW, &raw);
     }
 
-    // Read a line.  std::getline goes to the regular heap, but we minimise
-    // exposure by immediately copying into a SecureBuffer and cleansing.
-    std::string line;
+    // Read into secure_string so the password is zeroed automatically on
+    // destruction — even if an exception fires between getline and copy.
+    secure_string line;
     line.reserve(128);
     std::getline(std::cin, line);
 
@@ -65,11 +63,8 @@ SecureBuffer read_password(const std::string& prompt) {
     }
 
     SecureBuffer buf(line.size());
-    if (!line.empty()) {
+    if (!line.empty())
         std::memcpy(buf.data(), line.data(), line.size());
-        OPENSSL_cleanse(line.data(), line.size());
-        line.clear();
-    }
 
     return buf;
 }

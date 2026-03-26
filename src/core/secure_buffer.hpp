@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstring>
+#include <string>
 #include <openssl/crypto.h>  // OPENSSL_secure_malloc, OPENSSL_secure_clear_free
 
 /**
@@ -96,3 +97,55 @@ private:
     size_t         size_;
     unsigned char* data_;
 };
+
+// ── SecureAllocator + secure_string ────────────────────────────────────────
+
+/**
+ * @brief STL-compatible allocator backed by OpenSSL's secure heap.
+ *
+ * @details Provides the same hardening guarantees as SecureBuffer
+ *   (mlock, guard pages, MADV_DONTDUMP, compiler-safe zeroing) but in a form
+ *   usable with std::basic_string and other STL containers.
+ *
+ *   Memory is zeroed via OPENSSL_secure_clear_free() on deallocation, so
+ *   sensitive strings are wiped automatically when they go out of scope or
+ *   when the container reallocates.
+ */
+template <typename T>
+struct SecureAllocator {
+    using value_type = T;
+
+    SecureAllocator() noexcept = default;
+
+    template <typename U>
+    SecureAllocator(const SecureAllocator<U>&) noexcept {}
+
+    T* allocate(std::size_t n) {
+        if (n == 0) return nullptr;
+
+        void* p = OPENSSL_secure_malloc(n * sizeof(T));
+        if (!p) {
+            p = OPENSSL_malloc(n * sizeof(T));
+            if (!p) throw std::bad_alloc();
+        }
+        return static_cast<T*>(p);
+    }
+
+    void deallocate(T* p, std::size_t n) noexcept {
+        if (p) OPENSSL_secure_clear_free(p, n * sizeof(T));
+    }
+
+    template <typename U>
+    bool operator==(const SecureAllocator<U>&) const noexcept { return true; }
+
+    template <typename U>
+    bool operator!=(const SecureAllocator<U>&) const noexcept { return false; }
+};
+
+/**
+ * @brief std::string replacement that lives on the OpenSSL secure heap.
+ *
+ * @details Drop-in for std::string in sensitive contexts (passwords, keys).
+ *   Automatically zeroed on destruction, reallocation, and scope exit.
+ */
+using secure_string = std::basic_string<char, std::char_traits<char>, SecureAllocator<char>>;

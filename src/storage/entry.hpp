@@ -66,7 +66,7 @@ std::vector<uint8_t> serialize_index(const PasswordEntry& entry);
  * @return Binary representation of the password record.
  * @throws std::invalid_argument if password exceeds ENTRY_MAX_STRING_LEN.
  */
-std::vector<uint8_t> serialize_password(const SecureBuffer& password);
+SecureBuffer serialize_password(const SecureBuffer& password);
 
 /**
  * @brief Deserialize an index record into a BrowsableEntry.

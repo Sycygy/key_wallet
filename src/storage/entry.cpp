@@ -95,15 +95,16 @@ std::vector<uint8_t> serialize_index(const PasswordEntry& entry) {
         entry.created_at, entry.updated_at, entry.expires_at);
 }
 
-std::vector<uint8_t> serialize_password(const SecureBuffer& password) {
+SecureBuffer serialize_password(const SecureBuffer& password) {
     if (password.size() > ENTRY_MAX_STRING_LEN)
         throw std::invalid_argument("Password exceeds maximum length");
 
-    std::vector<uint8_t> buf;
-    buf.reserve(2 + password.size());
-    write_u16(buf, static_cast<uint16_t>(password.size()));
+    const uint16_t plen = static_cast<uint16_t>(password.size());
+    SecureBuffer buf(2 + password.size());
+    buf.data()[0] = static_cast<unsigned char>(plen & 0xFF);
+    buf.data()[1] = static_cast<unsigned char>((plen >> 8) & 0xFF);
     if (password.size() > 0)
-        buf.insert(buf.end(), password.data(), password.data() + password.size());
+        std::memcpy(buf.data() + 2, password.data(), password.size());
     return buf;
 }
 

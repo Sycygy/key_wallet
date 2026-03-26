@@ -7,6 +7,8 @@
 #include <fstream>
 #include <stdexcept>
 
+#include <openssl/crypto.h>  // OPENSSL_cleanse
+
 #include "crypto/aead/aead.hpp"
 #include "crypto/kdf/kdf.hpp"
 #include "crypto/random/random.hpp"
@@ -168,6 +170,7 @@ static std::vector<uint8_t> vault_to_bytes(Vault& vault, const std::vector<uint8
                                   index_pt.data(), index_pt.size(),
                                   vault.save_counter,
                                   aad.data(), aad.size());
+    OPENSSL_cleanse(index_pt.data(), index_pt.size());
 
     // Build output
     std::vector<uint8_t> out;
@@ -226,7 +229,7 @@ Vault create_vault(const std::string& path,
     auto aad = build_aad(vault);
 
     // Create verification token: encrypt 32 zero bytes
-    std::vector<uint8_t> zero_pt(VAULT_VERIFY_PT_LEN, 0);
+    SecureBuffer zero_pt(VAULT_VERIFY_PT_LEN);  // zero-initialized
     auto verify_ct = aead_encrypt(vault.vault_key,
                                    zero_pt.data(), zero_pt.size(),
                                    aad.data(), aad.size());
@@ -347,6 +350,9 @@ Vault load_vault(const std::string& path,
 
         vault.entry_passwords.push_back(std::move(ec));
     }
+
+    // Cleanse raw file bytes — contains ciphertexts, IVs, tags, and header.
+    OPENSSL_cleanse(file_data.data(), file_data.size());
 
     return vault;
 }

@@ -194,10 +194,10 @@ Implement the following subcommands:
 ### 4.1 Memory Hardening
 - [x] **(v0.2 — moved from Phase 4 to Phase 1)** SecureBuffer uses OpenSSL secure heap
 - [x] **(v0.2 — moved from Phase 4 to Phase 1)** Process hardening: prctl + setrlimit in main()
-- [ ] Audit all `std::string` usages for sensitive data — replace with `SecureBuffer` or `secure_string`
-- [ ] Ensure no sensitive data ends up in STL containers that don't zero on destruction
-- [ ] Review all copy constructors and assignment operators for `SecureBuffer`
-- [ ] Compile with `-fstack-protector-strong` and verify no stack canary warnings
+- [x] Audit all `std::string` usages for sensitive data — replace with `SecureBuffer` or `secure_string`
+- [x] Ensure no sensitive data ends up in STL containers that don't zero on destruction
+- [x] Review all copy constructors and assignment operators for `SecureBuffer`
+- [x] Compile with `-fstack-protector-strong` and verify no stack canary warnings
 
 ### 4.2 Input Validation & Fuzzing
 - [ ] Fuzz the vault deserializer with `libFuzzer` or AFL++ on malformed binary inputs

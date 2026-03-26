@@ -40,7 +40,7 @@ SecureBuffer random_bytes(size_t n);
  *         than the number of requested charsets.
  * @throws std::runtime_error if the PRNG fails.
  */
-std::string generate_password(size_t length, CharsetFlags flags = Charset::All);
+secure_string generate_password(size_t length, CharsetFlags flags = Charset::All);
 
 /**
  * @brief Generate a random UUID v4 using RAND_bytes().

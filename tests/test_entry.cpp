@@ -90,7 +90,7 @@ TEST_F(EntryTest, PasswordEntryIndexRoundTrip) {
 
 TEST_F(EntryTest, PasswordRoundTrip) {
     SecureBuffer original = make_password("hunter2_ñ_日本語");
-    std::vector<uint8_t> data = serialize_password(original);
+    SecureBuffer data = serialize_password(original);
 
     size_t bytes_read = 0;
     SecureBuffer restored = deserialize_password(data.data(), data.size(), bytes_read);
@@ -102,7 +102,7 @@ TEST_F(EntryTest, PasswordRoundTrip) {
 
 TEST_F(EntryTest, EmptyPasswordRoundTrip) {
     SecureBuffer original(0);
-    std::vector<uint8_t> data = serialize_password(original);
+    SecureBuffer data = serialize_password(original);
 
     size_t bytes_read = 0;
     SecureBuffer restored = deserialize_password(data.data(), data.size(), bytes_read);
@@ -293,8 +293,12 @@ TEST_F(EntryTest, BytesReadExactForIndex) {
 
 TEST_F(EntryTest, BytesReadExactForPassword) {
     SecureBuffer pw = make_password("test123");
-    std::vector<uint8_t> data = serialize_password(pw);
-    data.push_back(0xFF); // trailing garbage
+    SecureBuffer serialized = serialize_password(pw);
+
+    // Copy into a larger buffer with trailing garbage byte
+    SecureBuffer data(serialized.size() + 1);
+    std::memcpy(data.data(), serialized.data(), serialized.size());
+    data.data()[serialized.size()] = 0xFF;
 
     size_t bytes_read = 0;
     SecureBuffer restored = deserialize_password(data.data(), data.size(), bytes_read);

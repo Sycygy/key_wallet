@@ -11,8 +11,6 @@
 #include <sstream>
 #include <string>
 
-#include <openssl/crypto.h>  // OPENSSL_cleanse
-
 #include "cli/input.hpp"
 #include "core/session.hpp"
 #include "crypto/random/random.hpp"
@@ -286,10 +284,9 @@ int cmd::run_add(Session& session) {
     std::string gen_choice;
     std::getline(std::cin, gen_choice);
     if (gen_choice.empty() || gen_choice == "y" || gen_choice == "Y") {
-        std::string generated = generate_password(20, Charset::All);
+        secure_string generated = generate_password(20, Charset::All);
         password = SecureBuffer(generated.size());
         std::memcpy(password.data(), generated.data(), generated.size());
-        OPENSSL_cleanse(generated.data(), generated.size());
         std::cout << "Password generated (20 chars, all charsets).\n";
     } else {
         password = cli::read_password("Password: ");
@@ -384,10 +381,9 @@ int cmd::run_update(Session& session, const std::string& name) {
         std::cout << "Generate new password? [Y/n]: " << std::flush;
         std::getline(std::cin, input);
         if (input.empty() || input == "y" || input == "Y") {
-            std::string generated = generate_password(20, Charset::All);
+            secure_string generated = generate_password(20, Charset::All);
             new_password = SecureBuffer(generated.size());
             std::memcpy(new_password.data(), generated.data(), generated.size());
-            OPENSSL_cleanse(generated.data(), generated.size());
             std::cout << "Password generated (20 chars, all charsets).\n";
         } else {
             new_password = cli::read_password("New password: ");
@@ -511,10 +507,9 @@ int cmd::run_generate(int length, uint8_t charset_flags) {
     }
 
     try {
-        std::string pw = generate_password(static_cast<size_t>(length),
-                                           charset_flags);
-        std::cout << pw << "\n";
-        OPENSSL_cleanse(pw.data(), pw.size());
+        secure_string pw = generate_password(static_cast<size_t>(length),
+                                             charset_flags);
+        std::cout << std::string_view(pw.data(), pw.size()) << "\n";
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "error: " << sanitize_error(e.what()) << "\n";

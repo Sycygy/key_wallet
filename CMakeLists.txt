@@ -34,7 +34,7 @@ target_include_directories(key_wallet PRIVATE
     ${OPENSSL_INCLUDE_DIR}
 )
 
-target_compile_options(key_wallet PRIVATE -Wall -Wextra -Wpedantic -O2)
+target_compile_options(key_wallet PRIVATE -Wall -Wextra -Wpedantic -O2 -fstack-protector-strong)
 
 target_link_libraries(key_wallet PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 

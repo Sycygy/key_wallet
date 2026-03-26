@@ -183,7 +183,7 @@ void Session::change_master(const SecureBuffer& old_password,
         auto aad = build_aad(v);
 
         // 5. Re-generate verification token under new vault key + new AAD.
-        std::vector<uint8_t> zero_pt(VAULT_VERIFY_PT_LEN, 0);
+        SecureBuffer zero_pt(VAULT_VERIFY_PT_LEN);  // zero-initialized
         auto verify_ct = aead_encrypt(v.vault_key,
                                        zero_pt.data(), zero_pt.size(),
                                        aad.data(), aad.size());

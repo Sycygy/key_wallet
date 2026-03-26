@@ -44,7 +44,7 @@ namespace {
      * @param s String to shuffle in place.
      * @throws std::runtime_error if RAND_priv_bytes fails.
      */
-    void secure_shuffle(std::string& s) {
+    void secure_shuffle(secure_string& s) {
         const size_t n = s.size();
         for (size_t i = n - 1; i > 0; --i) {
             // We need an unbiased index in [0, i].
@@ -80,7 +80,7 @@ SecureBuffer random_bytes(size_t n) {
     return buf;
 }
 
-std::string generate_password(size_t length, CharsetFlags flags) {
+secure_string generate_password(size_t length, CharsetFlags flags) {
     if (length == 0)
         throw std::invalid_argument("password length must be > 0");
 
@@ -107,7 +107,7 @@ std::string generate_password(size_t length, CharsetFlags flags) {
         throw std::invalid_argument(
             "password length is too short to satisfy the per-charset guarantee");
 
-    std::string result;
+    secure_string result;
     result.reserve(length);
 
     // --- Phase 1: guarantee at least one character from each requested charset ---
