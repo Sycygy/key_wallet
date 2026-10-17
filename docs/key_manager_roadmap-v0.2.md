@@ -101,27 +101,27 @@ Phase 5 → GUI (stretch goal)
 **Goal:** A fully encrypted binary vault file using the two-layer format that can be created, loaded, and modified on disk.
 
 ### 2.1 `storage/entry`
-- [ ] Define `PasswordEntry` struct: `{id, name, website, username, password, created_at, updated_at, expires_at}`
-- [ ] Define `BrowsableEntry` struct: same but **no password field** (v0.2 — password is never loaded)
-- [ ] Implement split binary serialization:
+- [x] Define `PasswordEntry` struct: `{id, name, website, username, password, created_at, updated_at, expires_at}`
+- [x] Define `BrowsableEntry` struct: same but **no password field** (v0.2 — password is never loaded)
+- [x] Implement split binary serialization:
   - `serialize_index(entry) → bytes` — everything except password
   - `serialize_password(entry) → bytes` — password only
   - `deserialize_index(bytes) → BrowsableEntry`
   - `deserialize_password(bytes) → SecureBuffer`
-- [ ] Validate all length fields on deserialization (prevent buffer overflows)
-- [ ] Unit test: round-trip serialize/deserialize; malformed input → error
+- [x] Validate all length fields on deserialization (prevent buffer overflows)
+- [x] Unit test: round-trip serialize/deserialize; malformed input → error
 
 ### 2.2 `storage/vault`
-- [ ] Implement vault binary format v0.2 (see design doc Section 6)
-- [ ] `create_vault(path, master_password) → Vault` — generates salt, derives vault key, generates verification token, assigns UUIDs, encrypts index and per-entry passwords separately
-- [ ] `load_vault(path, master_password) → Vault` — reads file, verifies AAD, verifies token, **decrypts index only** (passwords remain on disk as ciphertexts)
-- [ ] `save_vault(vault, path)` — increments `save_counter`, builds hybrid IV, re-encrypts index and modified entry passwords, writes atomically via `rename()`
-- [ ] `get_entry(id) → PasswordEntry` — reads entry's ciphertext from disk, derives `entry_key = HKDF(vault_key, uuid)`, decrypts, returns entry with password. Caller responsible for zeroing via RAII.
-- [ ] AAD covers: MAGIC + VERSION + CREATED_AT + SALT + ARGON2_PARAMS (authenticated in index AND every entry ciphertext)
-- [ ] `verify_master_password(input) → bool` — re-derives key, attempts token decryption
-- [ ] `check_expiry() → ExpiryStatus` — returns EXPIRED, WARNING (≤7 days), or OK
-- [ ] Detect FORMAT_VERSION=1 (v0.1 vaults) and reject with migration message
-- [ ] Unit test: create → load round-trip; tampered file → error; wrong password → error; per-entry decrypt; version detection
+- [x] Implement vault binary format v0.2 (see design doc Section 6)
+- [x] `create_vault(path, master_password) → Vault` — generates salt, derives vault key, generates verification token, assigns UUIDs, encrypts index and per-entry passwords separately
+- [x] `load_vault(path, master_password) → Vault` — reads file, verifies AAD, verifies token, **decrypts index only** (passwords remain on disk as ciphertexts)
+- [x] `save_vault(vault, path)` — increments `save_counter`, builds hybrid IV, re-encrypts index and modified entry passwords, writes atomically via `rename()`
+- [x] `get_entry(id) → PasswordEntry` — reads entry's ciphertext from disk, derives `entry_key = HKDF(vault_key, uuid)`, decrypts, returns entry with password. Caller responsible for zeroing via RAII.
+- [x] AAD covers: MAGIC + VERSION + CREATED_AT + SALT + ARGON2_PARAMS (authenticated in index AND every entry ciphertext)
+- [x] `verify_master_password(input) → bool` — re-derives key, attempts token decryption
+- [x] `check_expiry() → ExpiryStatus` — returns EXPIRED, WARNING (≤7 days), or OK
+- [x] Detect FORMAT_VERSION=1 (v0.1 vaults) and reject with migration message
+- [x] Unit test: create → load round-trip; tampered file → error; wrong password → error; per-entry decrypt; version detection
 
 ### 2.3 Entry CRUD on Vault
 - [x] `vault.add_entry(entry)` — generates UUID, derives entry_key, encrypts password separately
@@ -146,17 +146,17 @@ Phase 5 → GUI (stretch goal)
 - [x] Clipboard clear: overwrite after configurable timeout (default 30s) in background thread
 
 ### 3.2 `core/session`
-- [ ] Implement LOCKED / EXPIRED / BROWSING / RETRIEVING state machine
-- [ ] `unlock(path, master_password)` — loads vault (index only), derives vault key, calls `check_expiry()`:
+- [x] Implement LOCKED / EXPIRED / BROWSING / RETRIEVING state machine
+- [x] `unlock(path, master_password)` — loads vault (index only), derives vault key, calls `check_expiry()`:
   - EXPIRED → transition to EXPIRED state, print hard-block message
   - WARNING → transition to BROWSING, print non-blocking warning with days remaining
   - OK → transition to BROWSING, start inactivity timer
-- [ ] `verify_master_password(input) → bool` — re-derives key, checks verification token
-- [ ] `retrieve(entry_id, master_password) → PasswordEntry` — calls verify, derives entry_key via HKDF, decrypts single password from disk → RETRIEVING then back to BROWSING
-- [ ] `lock()` — zeros vault key and all sensitive fields → LOCKED
-- [ ] Auto-lock after configurable inactivity timeout (default 5 min)
-- [ ] In EXPIRED state: only `change-master` is permitted
-- [ ] `change-master` re-derives all entry keys under new vault key, re-encrypts all passwords, resets `master_password_changed_at = now`
+- [x] `verify_master_password(input) → bool` — re-derives key, checks verification token
+- [x] `retrieve(entry_id, master_password) → PasswordEntry` — calls verify, derives entry_key via HKDF, decrypts single password from disk → RETRIEVING then back to BROWSING
+- [x] `lock()` — zeros vault key and all sensitive fields → LOCKED
+- [x] Auto-lock after configurable inactivity timeout (default 5 min)
+- [x] In EXPIRED state: only `change-master` is permitted
+- [x] `change-master` re-derives all entry keys under new vault key, re-encrypts all passwords, resets `master_password_changed_at = now`
 
 ### 3.3 `cli/commands`
 Implement the following subcommands:
